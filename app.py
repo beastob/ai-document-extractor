@@ -4,6 +4,7 @@ Bank Statement PDF Table Extractor, LLM Reshaper & ATO Tax Converter
 """
 
 import io
+import os
 import warnings
 import pandas as pd
 import streamlit as st
@@ -25,7 +26,8 @@ from src.llm_processor import (
     check_ollama_status,
     categorize_transactions_df,
     ATO_TAX_CATEGORIES,
-    DEDUCTIBILITY_STATUSES
+    DEDUCTIBILITY_STATUSES,
+    DEFAULT_OLLAMA_URL
 )
 from src.excel_exporter import (
     dataframe_to_excel_bytes,
@@ -100,22 +102,22 @@ def main():
         options=["offline", "ollama"],
         format_func=lambda x: {
             "offline": "⚡ Offline Rule Engine (AU Merchant Dictionary)",
-            "ollama": "🤖 Local Ollama LLM (http://localhost:11434)"
+            "ollama": f"🤖 Local Ollama LLM ({DEFAULT_OLLAMA_URL})"
         }[x],
         help="Choose between lightning fast offline merchant matching or local Ollama LLM."
     )
 
     ollama_model = "llama3.2"
     if tax_provider == "ollama":
-        ollama_running, available_models = check_ollama_status()
+        ollama_running, available_models = check_ollama_status(DEFAULT_OLLAMA_URL)
         if ollama_running:
-            st.sidebar.success("🟢 Ollama Connected Locally")
+            st.sidebar.success(f"🟢 Ollama Connected ({DEFAULT_OLLAMA_URL})")
             if available_models:
                 ollama_model = st.sidebar.selectbox("Ollama Model:", options=available_models)
             else:
                 ollama_model = st.sidebar.text_input("Ollama Model Name:", value="llama3.2")
         else:
-            st.sidebar.warning("🔴 Ollama server not detected at http://localhost:11434. Will use Offline AU Rules.")
+            st.sidebar.warning(f"🔴 Ollama server not detected at {DEFAULT_OLLAMA_URL}. Will use Offline AU Rules.")
 
     st.sidebar.markdown("---")
     st.sidebar.info("🔒 **100% Local & Private**\nAll document processing runs on your local machine. Zero internet calls required.")

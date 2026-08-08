@@ -6,6 +6,7 @@ and a robust offline Australian merchant keyword rule engine.
 
 import json
 import logging
+import os
 import re
 from typing import Dict, List, Optional, Tuple, Any
 import urllib.request
@@ -13,6 +14,7 @@ import urllib.error
 import pandas as pd
 
 logger = logging.getLogger(__name__)
+DEFAULT_OLLAMA_URL = os.getenv("OLLAMA_HOST", "http://localhost:11434")
 
 # Standard ATO Tax Return Categories for Australia
 ATO_TAX_CATEGORIES = [
@@ -75,7 +77,7 @@ AU_KEYWORD_RULES = [
 ]
 
 
-def check_ollama_status(ollama_url: str = "http://localhost:11434") -> Tuple[bool, List[str]]:
+def check_ollama_status(ollama_url: str = DEFAULT_OLLAMA_URL) -> Tuple[bool, List[str]]:
     """
     Checks if Ollama service is running locally and returns list of installed models.
     """
@@ -167,7 +169,7 @@ def clean_and_parse_json(text: str) -> Optional[Dict[str, Any]]:
 def query_ollama_json(
     prompt: str,
     model: str = "llama3.2",
-    ollama_url: str = "http://localhost:11434",
+    ollama_url: str = DEFAULT_OLLAMA_URL,
     timeout: int = 120
 ) -> Optional[Dict[str, Any]]:
     """
@@ -198,7 +200,7 @@ def query_ollama_json(
 def extract_transactions_from_pdf_text_llm(
     raw_text: str,
     model_name: str = "qwen2.5:3b",
-    ollama_url: str = "http://localhost:11434"
+    ollama_url: str = DEFAULT_OLLAMA_URL
 ) -> pd.DataFrame:
     """
     Extracts structured bank statement transactions from raw document text by chunking
@@ -263,7 +265,7 @@ def categorize_transactions_df(
     df: pd.DataFrame,
     provider: str = "offline",  # "offline", "ollama", or "cloud"
     model_name: str = "llama3.2",
-    ollama_url: str = "http://localhost:11434",
+    ollama_url: str = DEFAULT_OLLAMA_URL,
     api_key: Optional[str] = None
 ) -> pd.DataFrame:
     """
