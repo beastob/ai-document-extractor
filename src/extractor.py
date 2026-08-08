@@ -18,11 +18,14 @@ os.environ["TORCHDYNAMO_DISABLE"] = "1"
 
 # Dynamically apply architecture-specific tuning at runtime
 _arch = platform.machine().lower()
-if _arch in ("aarch64", "arm64", "armv7l", "arm"):
+_is_arm = _arch in ("aarch64", "arm64", "armv7l", "arm")
+
+if _is_arm:
     os.environ.setdefault("OPENBLAS_CORETYPE", "ARMV8")
-    cpu_cores = str(os.cpu_count() or 4)
-    os.environ.setdefault("OMP_NUM_THREADS", cpu_cores)
-    os.environ.setdefault("MKL_NUM_THREADS", cpu_cores)
+    # Force OpenBLAS & OpenMP single-threading to eliminate OpenBLAS memory buffer race condition (SIGSEGV)
+    os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    os.environ.setdefault("MKL_NUM_THREADS", "1")
 
 import io
 import re
@@ -38,7 +41,7 @@ logger = logging.getLogger(__name__)
 _docling_converter = None
 
 def get_docling_converter():
-    """Lazily initializes and caches the Docling DocumentConverter with multi-threaded CPU acceleration."""
+    """Lazily initializes and caches the Docling DocumentConverter with thread-safe options."""
     global _docling_converter
     if _docling_converter is None:
         try:
@@ -46,7 +49,8 @@ def get_docling_converter():
             from docling.datamodel.pipeline_options import PdfPipelineOptions, AcceleratorOptions, AcceleratorDevice
             from docling.datamodel.base_models import InputFormat
 
-            threads = os.cpu_count() or 4
+            # On ARM64 (Raspberry Pi), limit to 2 threads to prevent OOM & memory buffer segmentation faults
+            threads = min(2, os.cpu_count() or 1) if _is_arm else (os.cpu_count() or 4)
             accel_options = AcceleratorOptions(
                 num_threads=threads,
                 device=AcceleratorDevice.AUTO
