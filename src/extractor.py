@@ -20,8 +20,9 @@ os.environ["TORCHDYNAMO_DISABLE"] = "1"
 _arch = platform.machine().lower()
 if _arch in ("aarch64", "arm64", "armv7l", "arm"):
     os.environ.setdefault("OPENBLAS_CORETYPE", "ARMV8")
-    os.environ.setdefault("OMP_NUM_THREADS", "1")
-    os.environ.setdefault("MKL_NUM_THREADS", "1")
+    cpu_cores = str(os.cpu_count() or 4)
+    os.environ.setdefault("OMP_NUM_THREADS", cpu_cores)
+    os.environ.setdefault("MKL_NUM_THREADS", cpu_cores)
 
 import io
 import re
@@ -37,12 +38,27 @@ logger = logging.getLogger(__name__)
 _docling_converter = None
 
 def get_docling_converter():
-    """Lazily initializes and caches the Docling DocumentConverter."""
+    """Lazily initializes and caches the Docling DocumentConverter with multi-threaded CPU acceleration."""
     global _docling_converter
     if _docling_converter is None:
         try:
-            from docling.document_converter import DocumentConverter
-            _docling_converter = DocumentConverter()
+            from docling.document_converter import DocumentConverter, PdfFormatOption
+            from docling.datamodel.pipeline_options import PdfPipelineOptions, AcceleratorOptions, AcceleratorDevice
+            from docling.datamodel.base_models import InputFormat
+
+            threads = os.cpu_count() or 4
+            accel_options = AcceleratorOptions(
+                num_threads=threads,
+                device=AcceleratorDevice.AUTO
+            )
+            pipeline_options = PdfPipelineOptions(accelerator_options=accel_options)
+
+            _docling_converter = DocumentConverter(
+                format_options={
+                    InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
+                }
+            )
+            logger.info(f"Initialized IBM Docling DocumentConverter with {threads} CPU threads")
         except Exception as e:
             logger.error(f"Failed to initialize IBM Docling DocumentConverter: {e}")
             raise ImportError(f"IBM Docling is not properly installed or initialized: {e}")

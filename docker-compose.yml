@@ -10,4 +10,7 @@ services:
       - OLLAMA_HOST=http://host.docker.internal:11434
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    # Pass-through Intel iGPU (UHD Graphics 600) on Synology NAS / Linux hosts
+    # devices:
+    #   - /dev/dri:/dev/dri
     restart: unless-stopped
