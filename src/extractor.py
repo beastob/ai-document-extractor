@@ -10,9 +10,18 @@ import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)
 
-# Disable PyTorch compilation dry-run on Windows (prevents missing MSVC cl.exe compiler errors)
+import platform
+
+# Disable PyTorch compilation dry-run (prevents missing MSVC cl.exe compiler errors)
 os.environ["TORCH_COMPILE_DISABLE"] = "1"
 os.environ["TORCHDYNAMO_DISABLE"] = "1"
+
+# Dynamically apply architecture-specific tuning at runtime
+_arch = platform.machine().lower()
+if _arch in ("aarch64", "arm64", "armv7l", "arm"):
+    os.environ.setdefault("OPENBLAS_CORETYPE", "ARMV8")
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    os.environ.setdefault("MKL_NUM_THREADS", "1")
 
 import io
 import re
