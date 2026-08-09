@@ -1,6 +1,37 @@
+# ── Stage 1: Builder ──
+FROM python:3.11-slim AS builder
+
+WORKDIR /app
+
+# Install build dependencies for compiling any native extensions and system libraries for pre-downloading models
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libgl1 \
+    libglib2.0-0 \
+    libgomp1 \
+    libxcb1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create virtual environment to isolate runtime dependencies
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+COPY requirements.txt .
+
+# 1. Install CPU-only PyTorch (~200MB) instead of default CUDA PyTorch (~2-4.5GB)
+# 2. Install application dependencies from requirements.txt
+RUN pip install --no-cache-dir \
+    torch torchvision --index-url https://download.pytorch.org/whl/cpu \
+ && pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+# Pre-download RapidOCR & IBM Docling models during build stage
+RUN python -c "from rapidocr import RapidOCR; RapidOCR(); from src.extractor import get_docling_converter; get_docling_converter()"
+
+# ── Stage 2: Minimal Runtime ──
 FROM python:3.11-slim
 
-# Prevent Python from writing .pyc files and buffering stdout/stderr
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     STREAMLIT_SERVER_PORT=8501 \
@@ -14,24 +45,22 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Install system dependencies required for PDF processing and rendering
+# Install only essential runtime system libraries (no build-essential compiler)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
     curl \
     libgl1 \
     libglib2.0-0 \
     libgomp1 \
-    && rm -rf /var/lib/apt-get/lists/*
+    libxcb1 \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Copy virtual environment and pre-downloaded model cache from builder
+COPY --from=builder /opt/venv /opt/venv
+COPY --from=builder /root/.cache /root/.cache
+ENV PATH="/opt/venv/bin:$PATH"
 
-# Copy source code and tests
+# Copy application source code
 COPY . .
-
-# Pre-download RapidOCR & IBM Docling models during image build for 100% offline runtime & fast cold-start
-RUN python -c "from rapidocr import RapidOCR; RapidOCR(); from src.extractor import get_docling_converter; get_docling_converter()"
 
 EXPOSE 8501
 

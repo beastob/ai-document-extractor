@@ -34,48 +34,62 @@ import io
 import re
 import tempfile
 import logging
+import threading
 from typing import List, Dict, Tuple, Optional, Any, Union
 import pandas as pd
 import pdfplumber
 
 logger = logging.getLogger(__name__)
 
-# Lazy import for Docling to speed up app initialization
+# Cached instance & thread lock for Docling DocumentConverter
 _docling_converter = None
+_docling_lock = threading.Lock()
 
 def get_docling_converter():
-    """Lazily initializes and caches the Docling DocumentConverter with thread-safe options."""
+    """Initializes and caches the Docling DocumentConverter with thread-safe options."""
     global _docling_converter
     if _docling_converter is None:
-        try:
-            from docling.document_converter import DocumentConverter, PdfFormatOption
-            from docling.datamodel.pipeline_options import PdfPipelineOptions, AcceleratorOptions, AcceleratorDevice
-            from docling.datamodel.base_models import InputFormat
+        with _docling_lock:
+            if _docling_converter is None:
+                try:
+                    from docling.document_converter import DocumentConverter, PdfFormatOption
+                    from docling.datamodel.pipeline_options import PdfPipelineOptions, AcceleratorOptions, AcceleratorDevice
+                    from docling.datamodel.base_models import InputFormat
 
-            # On ARM64 (Raspberry Pi), limit to 2 threads to prevent OOM & memory buffer segmentation faults
-            threads = min(2, os.cpu_count() or 1) if _is_arm else (os.cpu_count() or 4)
-            accel_options = AcceleratorOptions(
-                num_threads=threads,
-                device=AcceleratorDevice.AUTO
-            )
+                    # On ARM64 (Raspberry Pi), limit to 2 threads to prevent OOM & memory buffer segmentation faults
+                    threads = min(2, os.cpu_count() or 1) if _is_arm else (os.cpu_count() or 4)
+                    accel_options = AcceleratorOptions(
+                        num_threads=threads,
+                        device=AcceleratorDevice.AUTO
+                    )
 
-            try:
-                from docling.datamodel.pipeline_options import RapidOcrOptions
-                ocr_options = RapidOcrOptions()
-                pipeline_options = PdfPipelineOptions(accelerator_options=accel_options, ocr_options=ocr_options)
-            except (ImportError, Exception):
-                pipeline_options = PdfPipelineOptions(accelerator_options=accel_options)
+                    try:
+                        from docling.datamodel.pipeline_options import RapidOcrOptions
+                        ocr_options = RapidOcrOptions()
+                        pipeline_options = PdfPipelineOptions(accelerator_options=accel_options, ocr_options=ocr_options)
+                    except (ImportError, Exception):
+                        pipeline_options = PdfPipelineOptions(accelerator_options=accel_options)
 
-            _docling_converter = DocumentConverter(
-                format_options={
-                    InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
-                }
-            )
-            logger.info(f"Initialized IBM Docling DocumentConverter with {threads} CPU threads")
-        except Exception as e:
-            logger.error(f"Failed to initialize IBM Docling DocumentConverter: {e}")
-            raise ImportError(f"IBM Docling is not properly installed or initialized: {e}")
+                    _docling_converter = DocumentConverter(
+                        format_options={
+                            InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
+                        }
+                    )
+                    logger.info(f"Initialized IBM Docling DocumentConverter with {threads} CPU threads")
+                except Exception as e:
+                    logger.error(f"Failed to initialize IBM Docling DocumentConverter: {e}")
+                    raise ImportError(f"IBM Docling is not properly installed or initialized: {e}")
     return _docling_converter
+
+
+def warmup_docling_async():
+    """Starts warming up Docling & RapidOCR model weights in a background thread upon startup."""
+    thread = threading.Thread(target=get_docling_converter, daemon=True, name="DoclingWarmupThread")
+    thread.start()
+
+
+# Automatically start background warmup on module import (container startup)
+warmup_docling_async()
 
 
 def is_scanned_pdf(pdf_path_or_bytes: Union[str, bytes], min_text_chars_per_page: int = 50) -> bool:
