@@ -4,7 +4,13 @@ FROM python:3.11-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     STREAMLIT_SERVER_PORT=8501 \
-    STREAMLIT_SERVER_ADDRESS=0.0.0.0
+    STREAMLIT_SERVER_ADDRESS=0.0.0.0 \
+    NNPACK_DISABLE=1 \
+    GLOG_minloglevel=2 \
+    TORCH_CPP_LOG_LEVEL=ERROR \
+    OMP_NUM_THREADS=4 \
+    MKL_NUM_THREADS=4 \
+    OPENBLAS_NUM_THREADS=4
 
 WORKDIR /app
 
@@ -23,6 +29,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy source code and tests
 COPY . .
+
+# Pre-download RapidOCR & IBM Docling models during image build for 100% offline runtime & fast cold-start
+RUN python -c "from rapidocr import RapidOCR; RapidOCR(); from src.extractor import get_docling_converter; get_docling_converter()"
 
 EXPOSE 8501
 

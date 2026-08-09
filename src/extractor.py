@@ -12,9 +12,12 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 
 import platform
 
-# Disable PyTorch compilation dry-run (prevents missing MSVC cl.exe compiler errors)
+# Disable PyTorch compilation dry-run & silence C++ GLOG NNPACK warnings
 os.environ["TORCH_COMPILE_DISABLE"] = "1"
 os.environ["TORCHDYNAMO_DISABLE"] = "1"
+os.environ["NNPACK_DISABLE"] = "1"
+os.environ["GLOG_minloglevel"] = "2"
+os.environ["TORCH_CPP_LOG_LEVEL"] = "ERROR"
 
 # Dynamically apply architecture-specific tuning at runtime
 _arch = platform.machine().lower()
@@ -55,7 +58,13 @@ def get_docling_converter():
                 num_threads=threads,
                 device=AcceleratorDevice.AUTO
             )
-            pipeline_options = PdfPipelineOptions(accelerator_options=accel_options)
+
+            try:
+                from docling.datamodel.pipeline_options import RapidOcrOptions
+                ocr_options = RapidOcrOptions()
+                pipeline_options = PdfPipelineOptions(accelerator_options=accel_options, ocr_options=ocr_options)
+            except (ImportError, Exception):
+                pipeline_options = PdfPipelineOptions(accelerator_options=accel_options)
 
             _docling_converter = DocumentConverter(
                 format_options={

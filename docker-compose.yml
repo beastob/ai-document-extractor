@@ -8,9 +8,23 @@ services:
       - "8501:8501"
     environment:
       - OLLAMA_HOST=http://host.docker.internal:11434
+      - NNPACK_DISABLE=1
+      - GLOG_minloglevel=2
+      - TORCH_CPP_LOG_LEVEL=ERROR
+      - OMP_NUM_THREADS=4
+      - MKL_NUM_THREADS=4
+      - OPENBLAS_NUM_THREADS=4
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    volumes:
+      # Cache and persist OCR & Docling model files across container updates/recreations
+      - rapidocr_models:/usr/local/lib/python3.11/site-packages/rapidocr/models
+      - docling_cache:/root/.cache
     # Pass-through Intel iGPU (UHD Graphics 600) on Synology NAS / Linux hosts
     # devices:
     #   - /dev/dri:/dev/dri
     restart: unless-stopped
+
+volumes:
+  rapidocr_models:
+  docling_cache:

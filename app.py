@@ -119,8 +119,12 @@ def main():
         else:
             st.sidebar.warning(f"🔴 Ollama server not detected at {DEFAULT_OLLAMA_URL}. Will use Offline AU Rules.")
 
-    st.sidebar.markdown("---")
-    st.sidebar.info("🔒 **100% Local & Private**\nAll document processing runs on your local machine. Zero internet calls required.")
+    st.sidebar.info(
+        "🔒 **100% Local & Private**\n"
+        "All document processing runs on your local machine. Zero internet calls required.\n\n"
+        "🛡️ **Zero Data Retention Guarantee**\n"
+        "Uploaded PDFs & generated exports are processed 100% in-memory (RAM). Zero documents or extracted data are stored on disk."
+    )
 
     # Main content - File Uploader
     uploaded_files = st.file_uploader(
